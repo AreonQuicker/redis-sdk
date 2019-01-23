@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Gideon</Authors>
+    <Version>6.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InternalCache.Store\InternalCache.Store.csproj" />
+    <ProjectReference Include="..\RedisCache.Store\RedisCache.Store.csproj" />
+  </ItemGroup>
+
+</Project>

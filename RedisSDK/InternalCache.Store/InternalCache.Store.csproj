@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Gidoen</Authors>
+    <Version>6.0.0</Version>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cache.Extensions\Cache.Extensions.csproj" />
+    <ProjectReference Include="..\Cache.Objects\Cache.Objects.csproj" />
+  </ItemGroup>
+
+</Project>
