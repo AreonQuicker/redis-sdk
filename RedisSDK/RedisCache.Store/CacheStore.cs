@@ -458,57 +458,43 @@ namespace RedisCache.Store
 
                 List<List<string>> values = null;
 
-                if (!connectionValues.All(a => a.ConnectionValueType == ConnectionValueType.Equals))
-                {
-                    var dKeys = connectionCacheDictionary.Keys;
 
-                    if (dKeys == null)
-                        return new List<string>();
+                var dKeys = connectionCacheDictionary.Keys;
 
-                    var rkeys = connectionValuesD
+                if (dKeys == null)
+                    return new List<string>();
+
+                var rkeys = connectionValuesD
+                    .AsParallel()
+                    .Select(s =>
+                    {
+                        switch (s.Value.ConnectionValueType)
+                        {
+                            case ConnectionValueType.Contains:
+                                return dKeys.Where(w => w.CaseInsensitiveContains(LinkKey(s.Value.Field, s.Value.Value))).ToList();
+                            case ConnectionValueType.StartsWith:
+                                return dKeys.Where(w => w.StartsWith(LinkKey(s.Value.Field, s.Value.Value))).ToList();
+                            case ConnectionValueType.EndWith:
+                                return dKeys.Where(w => w.EndsWith(LinkKey(s.Value.Field, s.Value.Value))).ToList();
+                            default:
+                                return dKeys.Where(w => w.Equals(LinkKey(s.Value.Field, s.Value.Value), StringComparison.CurrentCultureIgnoreCase)).ToList();
+                        }
+
+                    })
+                    .ToList();
+
+                values = rkeys
                         .AsParallel()
                         .Select(s =>
                         {
-                            switch (s.Value.ConnectionValueType)
-                            {
-                                case ConnectionValueType.Contains:
-                                    return dKeys.Where(w => w.CaseInsensitiveContains(LinkKey(s.Value.Field, s.Value.Value))).ToList();
-                                case ConnectionValueType.StartsWith:
-                                    return dKeys.Where(w => w.StartsWith(LinkKey(s.Value.Field, s.Value.Value))).ToList();
-                                case ConnectionValueType.EndWith:
-                                    return dKeys.Where(w => w.EndsWith(LinkKey(s.Value.Field, s.Value.Value))).ToList();
-                                default:
-                                    return dKeys.Where(w => w.Equals(LinkKey(s.Value.Field, s.Value.Value), StringComparison.CurrentCultureIgnoreCase)).ToList();
-                            }
-
-                        })
-                        .ToList();
-
-                    values = rkeys
-                            .AsParallel()
-                            .Select(s =>
-                            {
-                                return connectionCacheDictionary.GetValues(s.ToArray())
-                                .SelectMany(ss => ss)
-                                .Where(w => w != null)
-                                .ToList();
-                            })
-                            .Where(w => w != null)
-                            .ToList();
-                }
-                else
-                {
-                    values = connectionValuesD
-                        .AsParallel()
-                        .Select(s =>
-                        {
-                            return connectionCacheDictionary.GetValue(LinkKey(s.Value.Field, s.Value.Value))
+                            return connectionCacheDictionary.GetValues(s.ToArray())
+                            .SelectMany(ss => ss)
                             .Where(w => w != null)
                             .ToList();
                         })
                         .Where(w => w != null)
                         .ToList();
-                }
+
 
                 var keys = values.FirstOrDefault();
 
@@ -532,7 +518,7 @@ namespace RedisCache.Store
                 }
 
 
-                return keys;
+                return keys.Distinct().ToList();
             }
 
             return new List<string>();
@@ -545,7 +531,8 @@ namespace RedisCache.Store
             if (keys == null)
                 return new List<T>();
 
-            var values = CacheDictionaryInstance<T>().GetValuesMultiple(keys.ToArray());
+            var values = CacheDictionaryInstance<T>()
+                .GetValuesMultiple(keys.ToArray());
 
             if (values == null)
                 return new List<T>();

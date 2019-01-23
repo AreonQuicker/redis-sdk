@@ -101,6 +101,7 @@ namespace InternalCache.Store
                 return entityCacheStore.Values(eKey)
                     .Where(w => (w.DateAdded.Add(defaultCacheTimeSpan) > DateTime.Now))
                     .Select(s => s.Value)
+                    .Distinct()
                     .Cast<T>()
                     .ToList();
             }
@@ -222,6 +223,7 @@ namespace InternalCache.Store
                             return connectionValuesD.Values.Any(predicate);
                     })
                     .Select(s => s.Value)
+                    .Distinct()
                     .Cast<T>()
                     .ToList();
 
