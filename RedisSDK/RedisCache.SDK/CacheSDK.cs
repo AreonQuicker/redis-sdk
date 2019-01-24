@@ -1,4 +1,5 @@
-﻿using Cache.Objects;
+﻿using Cache.Extensions;
+using Cache.Objects;
 using RedisCache.Store;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,13 +32,13 @@ namespace RedisCache.SDK
         {
             if (internalCacheStore != null)
             {
+                RemoveAllExpiredInternal<T>();
+
                 var values = internalCacheStore.Get<T>(keys);
 
                 if (values.Count != keys.Length)
                 {
                     values = cacheStore.Get<T>(keys);
-
-                    RemoveAllExpiredInternal<T>();
 
                     if (values.Any())
                         internalCacheStore.SetAll((IEnumerable<object>)values);
@@ -55,13 +56,13 @@ namespace RedisCache.SDK
         {
             if (internalCacheStore != null)
             {
+                RemoveAllExpiredInternal<T>();
+
                 var value = internalCacheStore.Get<T>(key);
 
                 if (value == null)
                 {
                     value = cacheStore.Get<T>(key);
-
-                    RemoveAllExpiredInternal<T>();
 
                     if (value != null)
                         internalCacheStore.Set<T>(key, value);
@@ -80,13 +81,13 @@ namespace RedisCache.SDK
         {
             if (internalCacheStore != null)
             {
+                RemoveAllExpiredInternal<T>();
+
                 var values = internalCacheStore.GetAll<T>(typeof(T).Name);
 
                 if (!values.Any())
                 {
                     values = cacheStore.GetAll<T>();
-
-                    RemoveAllExpiredInternal<T>();
 
                     if (values.Any())
                         internalCacheStore.SetAll((IEnumerable<object>)values, typeof(T).Name);
@@ -101,46 +102,76 @@ namespace RedisCache.SDK
             }
         }
 
-        public override IList<T> GetAll<T>(ConnectionType connectionType, params ConnectionValue[] connectionValues)
+        public override IList<T> GetAll<T>(ConnectionType connectionType, string[] sortFields, int? take, params ConnectionValue[] connectionValues)
         {
-            var keys = cacheStore.GetAllKeys<T>(connectionType, connectionValues);
+            if (sortFields == null)
+                sortFields = new string[0];
 
-            if (internalCacheStore != null)
+            if (internalCacheStore == null)
             {
-                var key = $"{typeof(T).Name}-{connectionValues.GetType().Name}";
-
-                var values = internalCacheStore.GetAll<T>(connectionType, key, connectionValues);
-
-                if (values.Count < keys.Count)
-                {
-                    values = cacheStore.Get<T>(keys.ToArray());
-
-                    RemoveAllExpiredInternal<T>();
-
-                    if (values.Any())
-                        internalCacheStore.SetAll((IEnumerable<object>)values, key);
-
-                }
-
-                return values;
+                return cacheStore.GetAll<T>(connectionType, sortFields, take, connectionValues)
+                     .SortAndTake(take, sortFields)
+                     .ToList();
             }
-            else
+
+            RemoveAllExpiredInternal<T>();
+
+            IList<T> values = new List<T>();
+
+            var hashKey = connectionValues.Aggregate(0, (v, n) => v + n.GetHashCode())
+                .ToString();
+
+            hashKey += string.Join(",", sortFields);
+
+            values = internalCacheStore.GetAll<T>(connectionType, hashKey, sortFields, take, connectionValues);
+
+            if (values.Any())
             {
-                return cacheStore.Get<T>(keys.ToArray());
+                return values
+                    .SortAndTake(take, sortFields)
+                    .ToList();
             }
+
+            var redisKeys = cacheStore.GetAllKeys<T>(connectionType, sortFields, take, connectionValues);
+
+            var key = $"{typeof(T).Name}-{connectionValues.GetType().Name}";
+
+            values = internalCacheStore.GetAll<T>(connectionType, key, sortFields, take, connectionValues);
+
+            if (values.Count >= redisKeys.Count)
+            {
+                internalCacheStore.SetAll((IEnumerable<object>)values, hashKey);
+
+                return values
+                    .SortAndTake(take, sortFields)
+                    .ToList();
+            }
+
+            values = cacheStore.Get<T>(redisKeys.ToArray());
+
+            if (values.Any())
+            {
+                internalCacheStore.SetAll((IEnumerable<object>)values, key);
+                internalCacheStore.SetAll((IEnumerable<object>)values, hashKey);
+            }
+
+            return values
+                   .SortAndTake(take, sortFields)
+                   .ToList();
+
         }
 
         public override IList<T> GetAllMultiple<T>()
         {
             if (internalCacheStore != null)
             {
+                RemoveAllExpiredInternal<T>();
+
                 var values = internalCacheStore.GetAll<T>(typeof(T).Name);
 
                 if (!values.Any())
                 {
                     values = cacheStore.GetAllMultiple<T>();
-
-                    RemoveAllExpiredInternal<T>();
 
                     if (values.Any())
                         internalCacheStore.SetAll((IEnumerable<object>)values, typeof(T).Name);

@@ -139,12 +139,15 @@ namespace InternalCache.Store
 
         public override void SetAll(IEnumerable<object> values, string eKey)
         {
-            Type typeOfCache = values.FirstOrDefault().GetType();
+            if (values.Any())
+            {
+                Type typeOfCache = values.FirstOrDefault().GetType();
 
-            EntityCache entityCacheStore = GetAndAddEntityCache(typeOfCache);
+                EntityCache entityCacheStore = GetAndAddEntityCache(typeOfCache);
 
-            foreach (var value in values)
-                entityCacheStore.Set(value, eKey, propertyKey);
+                foreach (var value in values)
+                    entityCacheStore.Set(value, eKey, propertyKey);
+            }
         }
 
         public override void SetAll<T>(IEnumerable<KeyValuePair<string, T>> values, string eKey)
@@ -165,12 +168,12 @@ namespace InternalCache.Store
             SetAll<T>(values, null);
         }
 
-        public override IList<T> GetAll<T>(ConnectionType connectionType, params ConnectionValue[] connectionValues)
+        public override IList<T> GetAll<T>(ConnectionType connectionType, string[] sortFields, int? take, params ConnectionValue[] connectionValues)
         {
-            return GetAll<T>(connectionType, null, connectionValues);
+            return GetAll<T>(connectionType, null, sortFields, take, connectionValues);
         }
 
-        public override IList<T> GetAll<T>(ConnectionType connectionType, string eKey, params ConnectionValue[] connectionValues)
+        public override IList<T> GetAll<T>(ConnectionType connectionType, string eKey, string[] sortFields, int? take, params ConnectionValue[] connectionValues)
         {
             EntityCache entityCacheStore = GetEntityCache<T>();
 
@@ -224,10 +227,14 @@ namespace InternalCache.Store
                     })
                     .Select(s => s.Value)
                     .Distinct()
-                    .Cast<T>()
-                    .ToList();
+                    .Cast<T>();
 
-                return values;
+                if (take.HasValue)
+                    return values.SortAndTake(take.Value, sortFields)
+                        .ToList();
+                else
+                    return values.Sort(sortFields)
+                        .ToList();
             }
 
             return new List<T>();
@@ -379,6 +386,7 @@ namespace InternalCache.Store
 
                 return null;
             }
+
 
             public void Set(string key, object cacheItem)
             {

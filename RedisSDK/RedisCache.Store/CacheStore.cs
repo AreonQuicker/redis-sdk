@@ -7,9 +7,6 @@ using System.Threading.Tasks;
 
 namespace RedisCache.Store
 {
-    //TODO SetWithTIme
-    //TODO SetTime ForInteral Cache and CacheStore
-    //TODO Pass In Time When Running this environment
     public class CacheStore : BaseCacheStore
     {
         #region Private ReadOnly Variables
@@ -112,9 +109,9 @@ namespace RedisCache.Store
             return values;
         }
 
-        public override IList<T> GetAll<T>(ConnectionType connectionType, params ConnectionValue[] connectionValues)
+        public override IList<T> GetAll<T>(ConnectionType connectionType, string[] sortFields, int? take, params ConnectionValue[] connectionValues)
         {
-            return Get<T>(GetAllKeys<T>(connectionType, connectionValues).ToArray());
+            return Get<T>(GetAllKeys<T>(connectionType, sortFields, take, connectionValues).ToArray());
         }
 
         public override IList<Type> GetAllTypes()
@@ -444,22 +441,35 @@ namespace RedisCache.Store
 
         public override int GetAllCount<T>(ConnectionType connectionType, params ConnectionValue[] connectionValues)
         {
-            return GetAllKeys<T>(connectionType, connectionValues).Count;
+            return GetAllKeys<T>(connectionType, null, null, connectionValues).Count;
         }
 
-        public override IList<string> GetAllKeys<T>(ConnectionType connectionType, params ConnectionValue[] connectionValues)
+        public override IList<string> GetAllKeys<T>(ConnectionType connectionType, string[] sortFields, int? take, params ConnectionValue[] connectionValues)
         {
             var connectionCacheDictionary = ConnectionCacheDictionaryInstance<T>();
+
             if (connectionValues.Any())
             {
+                if (sortFields != null
+                    && sortFields.Any()
+                    && connectionValues.All(a => a.SortIndex == 0))
+                {
+                    foreach (var connectionValue in connectionValues)
+                    {
+                        connectionValue.SortIndex = sortFields
+                            .ToList()
+                            .FindIndex(f => f == connectionValue.Field);
+
+                        if (connectionValue.SortIndex == -1)
+                            connectionValue.SortIndex = sortFields.Length + 1;
+                    }
+                }
+
+                var dKeys = connectionCacheDictionary.Keys;
+
                 var connectionValuesD = connectionValues
                     .GroupBy(g => g.Field)
                     .ToDictionary(d => d.Key, d => d.FirstOrDefault());
-
-                List<List<string>> values = null;
-
-
-                var dKeys = connectionCacheDictionary.Keys;
 
                 if (dKeys == null)
                     return new List<string>();
@@ -471,30 +481,64 @@ namespace RedisCache.Store
                         switch (s.Value.ConnectionValueType)
                         {
                             case ConnectionValueType.Contains:
-                                return dKeys.Where(w => w.CaseInsensitiveContains(LinkKey(s.Value.Field, s.Value.Value))).ToList();
+                                return dKeys.Where(w => w.CaseInsensitiveContains(LinkKey(s.Value.Field, s.Value.Value)))
+                                    .Select(ss => new
+                                    {
+                                        value = ss,
+                                        sortKey = LinkKey(s.Value.SortIndex.ToString(), ss),
+                                        key = s.Key,
+                                    })
+                                    .ToList();
                             case ConnectionValueType.StartsWith:
-                                return dKeys.Where(w => w.StartsWith(LinkKey(s.Value.Field, s.Value.Value))).ToList();
+                                return dKeys.Where(w => w.StartsWith(LinkKey(s.Value.Field, s.Value.Value)))
+                                    .Select(ss => new
+                                    {
+                                        value = ss,
+                                        sortKey = LinkKey(s.Value.SortIndex.ToString(), ss),
+                                        key = s.Key,
+                                    })
+                                    .ToList();
                             case ConnectionValueType.EndWith:
-                                return dKeys.Where(w => w.EndsWith(LinkKey(s.Value.Field, s.Value.Value))).ToList();
+                                return dKeys.Where(w => w.EndsWith(LinkKey(s.Value.Field, s.Value.Value)))
+                                    .Select(ss => new
+                                    {
+                                        value = ss,
+                                        sortKey = LinkKey(s.Value.SortIndex.ToString(), ss),
+                                        key = s.Key,
+                                    })
+                                    .ToList();
                             default:
-                                return dKeys.Where(w => w.Equals(LinkKey(s.Value.Field, s.Value.Value), StringComparison.CurrentCultureIgnoreCase)).ToList();
+                                return dKeys.Where(w => w.Equals(LinkKey(s.Value.Field, s.Value.Value), StringComparison.CurrentCultureIgnoreCase))
+                                    .Select(ss => new
+                                    {
+                                        value = ss,
+                                        sortKey = LinkKey(s.Value.SortIndex.ToString(), ss),
+                                        key = s.Key,
+                                    });
                         }
 
                     })
+                    .SelectMany(s => s)
                     .ToList();
 
-                values = rkeys
+                var sortedrkeys = rkeys
+                        .OrderBy(o => o.sortKey)
+                        .Take(take.HasValue ? take.Value : rkeys.Count)
+                        .GroupBy(g => g.key)
+                        .ToDictionary(d => d.Key, d => d.Select(s => s.value)
+                        .ToList());
+
+                var values = sortedrkeys
                         .AsParallel()
                         .Select(s =>
                         {
-                            return connectionCacheDictionary.GetValues(s.ToArray())
-                            .SelectMany(ss => ss)
-                            .Where(w => w != null)
-                            .ToList();
+                            return connectionCacheDictionary
+                                .GetValues(s.Value.ToArray())
+                                .SelectMany(ss => ss)
+                                .Where(w => w != null).ToList();
                         })
                         .Where(w => w != null)
                         .ToList();
-
 
                 var keys = values.FirstOrDefault();
 
@@ -518,7 +562,10 @@ namespace RedisCache.Store
                 }
 
 
-                return keys.Distinct().ToList();
+                return keys
+                    .Distinct()
+                     .Take(take.HasValue ? take.Value : keys.Count)
+                    .ToList();
             }
 
             return new List<string>();

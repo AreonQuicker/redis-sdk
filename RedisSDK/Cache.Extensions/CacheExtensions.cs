@@ -1,6 +1,8 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
 
 namespace Cache.Extensions
@@ -69,6 +71,80 @@ namespace Cache.Extensions
                 return true;
 
             return false;
+        }
+
+        public static IEnumerable<T> MultipleSort<T>(this IEnumerable<T> data, params string[] sortBy)
+        {
+            return data.MultipleSort<T>(sortBy.Select(s => new Tuple<string, string>(s, "asc")).ToList());
+        }
+
+        public static IEnumerable<T> MultipleSort<T>(this IEnumerable<T> collection, List<Tuple<string, string>> sortBy)
+        {
+            var sortExpressions = new List<Tuple<string,
+                string>>();
+
+            for (int i = 0; i < sortBy.Count; i++)
+            {
+                var fieldName = sortBy[i].Item1.Trim();
+
+                var sortOrder = (sortBy[i].Item2 != null && sortBy[i].Item2.Length > 1) ?
+                    sortBy[i].Item2.Trim().ToLower() : "asc";
+
+                sortExpressions.Add(new Tuple<string, string>(fieldName, sortOrder));
+            }
+            if ((sortExpressions == null) || (sortExpressions.Count <= 0))
+            {
+                return collection;
+            }
+
+            IEnumerable<T> query = from item in collection select item;
+            IOrderedEnumerable<T> orderedQuery = null;
+
+            for (int i = 0; i < sortExpressions.Count; i++)
+            {
+                var index = i;
+
+                Func<T, object> expression = item => item.GetType()
+                 .GetProperty(sortExpressions[index].Item1)
+                 .GetValue(item, null);
+
+                if (sortExpressions[index].Item2 == "asc")
+                {
+                    orderedQuery = (index == 0) ? query.OrderBy(expression) :
+                        orderedQuery.ThenBy(expression);
+                }
+                else
+                {
+                    orderedQuery = (index == 0) ? query.OrderByDescending(expression) :
+                        orderedQuery.ThenByDescending(expression);
+                }
+            }
+            query = orderedQuery;
+
+            return query;
+        }
+
+        public static IEnumerable<T> Sort<T>(this IEnumerable<T> collection, params string[] sortBy)
+        {
+            return collection
+                .MultipleSort(sortBy);
+        }
+
+        public static IEnumerable<T> SortAndTake<T>(this IEnumerable<T> collection, int? take, params string[] sortBy)
+        {
+            if (take.HasValue)
+            {
+                return collection
+                    .Sort(sortBy)
+                    .Take(take.Value)
+                    .ToList();
+            }
+            else
+            {
+                return collection
+                   .Sort(sortBy)
+                   .ToList();
+            }
         }
     }
 }
