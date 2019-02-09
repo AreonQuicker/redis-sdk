@@ -387,7 +387,6 @@ namespace InternalCache.Store
                 return null;
             }
 
-
             public void Set(string key, object cacheItem)
             {
                 if (defaultStore.ContainsKey(key))

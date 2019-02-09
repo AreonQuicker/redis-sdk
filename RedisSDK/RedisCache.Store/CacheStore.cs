@@ -545,6 +545,8 @@ namespace RedisCache.Store
                     .SelectMany(s => s)
                     .ToList();
 
+                dKeys.Clear();
+
                 var sortedrkeys = rkeys
                         .OrderBy(o => o.sortKey)
                         .Take(take.HasValue ? take.Value : rkeys.Count)
@@ -563,6 +565,9 @@ namespace RedisCache.Store
                         })
                         .Where(w => w != null)
                         .ToList();
+
+                rkeys.Clear();
+                sortedrkeys.Clear();
 
                 var keys = values.FirstOrDefault();
 
@@ -607,6 +612,8 @@ namespace RedisCache.Store
 
             if (values == null)
                 return new List<T>();
+
+            keys.Clear();
 
             return values;
         }
