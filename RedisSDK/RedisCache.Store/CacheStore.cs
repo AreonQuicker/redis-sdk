@@ -240,6 +240,8 @@ namespace RedisCache.Store
                     foreach (var redisValue in redisValues)
                         cacheDictionaryInstance.Add(redisValue);
                 }
+
+                redisValues.Clear();
             }
         }
 
@@ -252,18 +254,20 @@ namespace RedisCache.Store
 
                 var cacheDictionaryInstance = CacheDictionaryInstance<T>();
 
-                values = values
-                    .AsParallel()
-                    .Select(s => new KeyValuePair<string, T>(Key<T>(s.Key), s.Value))
-                    .ToList();
+                var redisValues = values
+                     .AsParallel()
+                     .Select(s => new KeyValuePair<string, T>(Key<T>(s.Key), s.Value))
+                     .ToList();
 
                 if (addMultiple)
-                    cacheDictionaryInstance.AddMultiple(values);
+                    cacheDictionaryInstance.AddMultiple(redisValues);
                 else
                 {
-                    foreach (var value in values)
+                    foreach (var value in redisValues)
                         cacheDictionaryInstance.Add(value);
                 }
+
+                redisValues.Clear();
             }
         }
 
@@ -370,7 +374,15 @@ namespace RedisCache.Store
                     .Select(s => new KeyValuePair<string, List<string>>(s.Key, s.SelectMany(ss => ss.values).ToList()))
                     .ToList();
 
-                connectionCacheDictionary.AddMultiple(gValues);
+                if (addMultiple)
+                    connectionCacheDictionary.AddMultiple(gValues);
+                else
+                {
+                    foreach (var gValue in gValues)
+                        connectionCacheDictionary.Add(gValue);
+                }
+
+                gValues.Clear();
 
                 var redisValues =
                      values
@@ -385,6 +397,8 @@ namespace RedisCache.Store
                     foreach (var redisValue in redisValues)
                         cacheDictionaryInstance.Add(redisValue);
                 }
+
+                redisValues.Clear();
             }
         }
 
@@ -422,20 +436,30 @@ namespace RedisCache.Store
                     .Select(s => new KeyValuePair<string, List<string>>(s.Key, s.SelectMany(ss => ss.values).ToList()))
                     .ToList();
 
-                connectionCacheDictionary.AddMultiple(gValues);
-
-                values = values
-                    .AsParallel()
-                    .Select(s => new KeyValuePair<string, T>(Key<T>(s.Key), s.Value))
-                    .ToList();
-
                 if (addMultiple)
-                    cacheDictionaryInstance.AddMultiple(values);
+                    connectionCacheDictionary.AddMultiple(gValues);
                 else
                 {
-                    foreach (var value in values)
+                    foreach (var gValue in gValues)
+                        connectionCacheDictionary.Add(gValue);
+                }
+
+                gValues.Clear();
+
+                var redisValues = values
+                     .AsParallel()
+                     .Select(s => new KeyValuePair<string, T>(Key<T>(s.Key), s.Value))
+                     .ToList();
+
+                if (addMultiple)
+                    cacheDictionaryInstance.AddMultiple(redisValues);
+                else
+                {
+                    foreach (var value in redisValues)
                         cacheDictionaryInstance.Add(value);
                 }
+
+                redisValues.Clear();
             }
         }
 

@@ -113,7 +113,7 @@ namespace RedisCache.Store
                 ? $"{host}:{port.Value}"
                 : $"{host}";
 
-            connectionMultiplexer = ConnectionMultiplexer.Connect(redisServerConnection);
+            connectionMultiplexer = ConnectionMultiplexer.Connect(redisConnection);
 
             initialized = true;
         }
